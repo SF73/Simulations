@@ -8,6 +8,7 @@ spec = [
 ('G', nb.int32),
 ('tau', nb.float32),
 ('T', nb.float32),
+('paralyzableDeadTime', nb.boolean),
 ('td', nb.float32),
 ('BS', nb.float32),
 ('jitter', nb.float32),
@@ -39,6 +40,8 @@ class parameters(object):
         lifetime in ns
     T : float
         Integration time in s
+    paralyzableDeadTime : bool
+        Whether the deadtime is paralyzable or not (default: False)
     td : float
         dead-time of the TCSPC in ns
     BS : float
@@ -65,6 +68,10 @@ class parameters(object):
         Duration of OFF time of the beamblanker
     packetSize : int
         number of electron to generate per loop
+    table : float64[:]
+        Lookup table for truncated binomial law
+    pulsedClock : bool
+        Whether the clock a detector or a pulse generator (default: False)
     '''
     def __init__(self):
         self.clockFilter = 1
@@ -76,6 +83,7 @@ class parameters(object):
         self.T_Off = 0
         self.binNumber = int(2**16)
         self.pulsedClock = False
+        self.paralyzableDeadTime = False
     @property
     def bins(self):
         return np.arange(0,self.binNumber*self.dt*1e-3,self.dt*1e-3)
@@ -91,69 +99,3 @@ class parameters(object):
     @property
     def succes_proba(self):
         return 1-(1-self.efficiency)**self.G
-    
-    
-# class SimulationParameters:
-#     '''Class to hold all the parameters
-    
-#     Parameters
-#     ----------
-#     I : float
-#         Ebeam current in pA
-#     G : int
-#         number of electron-hole pair per electron
-#     tau : float
-#         lifetime in ns
-#     T : float
-#         Integration time in s
-#     deadTime : float
-#         dead-time of the TCSPC in ns
-#     efficiency : float
-#         photon collected/photon generated
-#     dt : bin\'s width in ps
-#     T_On : float
-#         Duration of ON time Beamblanker
-#     T_Off : float
-#         Duration of OFF time Beamblanker
-#     PacketSize : int
-#         number of electron to generate per loop
-#     SyncDivider : int
-#         SyncDivider
-#     '''
-#     def __init__(self):
-#         self.I = 2# in pA
-#         self.G = int(40)#int(5e3/(3*3.47)) #nombre de photons generés par e-
-#         self.tau = 0.200 #temps de vie en ns
-#         self.BS = 0.5 #portion du signal qui va sur le detecteur
-#         self.T = 1 #nombre de s de mesure
-#         self.deadTime = 86
-        
-#         self.clockFilter = 1 
-#         self.detectorFilter = 1
-#         self.jitter = 0
-#         # Photons collectés/photons générés avant beam splitter
-#         # Produit de IQErad x Extraction x Collection x Efficacité
-#         self.efficiency = 1e-3      
-#         self.dt = 4 #binning en ps        
-#         #Largeur de l'histogram
-#         self.binNumber = 2**16
-#         self.delay = 26
-#         #Delai supplémentaire entre detecteur et picoharp (cable)
-#         #self.delay = 26#100        
-#         # Nombre d'électrons générés par packet
-#         # Donne la possibilité a un photon du paquet n d'arriver 
-#         # après un photon du paquet n+PacketSize 
-#         self.PacketSize = 10000
-#         self.stopAt = 10000
-#         self.T_On = 6.25
-#         self.T_Off = 6.25
-#         self.SyncDivider = 1
-#     def getbins(self):
-#         return np.arange(0,self.binNumber*self.dt*1e-3,self.dt*1e-3)
-#     def get_eRate(self):
-#         return (self.I/1.602176634e-19)*1e-21
-#     def tostring(self):
-#         header = ""
-#         for i, j in self.__dict__.items():
-#             header += "{}\t{}\n".format(i,j)
-#         return header

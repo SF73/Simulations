@@ -42,7 +42,10 @@ def run(param):
                 #clock = applyDeadTime(clock,deadTime)
                 clock = norm(0,param.jitter,clock)
                 photons += param.detectorDelay
-                photons = applyDeadTime(photons,param.td)
+                if param.paralyzableDeadTime:    
+                    photons = applyDeadTime_p(photons,param.td)
+                else:
+                    photons = applyDeadTime_np(photons,param.td)
                 N1_after_deadtime += len(photons)
                 photons = norm(0,param.jitter,photons)
                 
@@ -67,8 +70,12 @@ def run(param):
                         
                         clock = norm(0,param.jitter,clock)
                         detector = norm(0,param.jitter,detector)
-                        clock = applyDeadTime(clock,param.td)
-                        detector = applyDeadTime(detector,param.td)
+                        if param.paralyzableDeadTime:    
+                            clock = applyDeadTime_p(clock,param.td)
+                            detector = applyDeadTime_p(detector,param.td)
+                        else:
+                            clock = applyDeadTime_np(clock,param.td)
+                            detector = applyDeadTime_np(detector,param.td)
                         N0_after_deadtime += clock.size
                         N1_after_deadtime += detector.size
                         delays = correlate(clock,detector)
@@ -78,7 +85,7 @@ def run(param):
 
 
 @njit(cache=True,nogil=True)
-def applyDeadTime(array,deadTime):
+def applyDeadTime_np(array,deadTime):
     if len(array)<2:
         return array
     i=0
@@ -89,6 +96,29 @@ def applyDeadTime(array,deadTime):
         for j in range(i+1,len(array)):
             #pour chaque element on regarde quand le dead time est fini
             if (array[j]>(array[i]+deadTime)):
+                #delai plus grand que deadTime
+                #on garde le delai
+                c = c+1
+                onTime[c]=array[j]
+                #on saute les photons compris dans le deadTime
+                i=j
+                break
+        if (j==len(array)-1):
+            break
+    return onTime[0:c+1]
+
+@njit(cache=True,nogil=True)
+def applyDeadTime_p(array,deadTime):
+    if len(array)<2:
+        return array
+    i=0
+    c=0
+    onTime=np.empty_like(array)
+    onTime[0]=array[0]
+    while i < (len(array)-1):
+        for j in range(i+1,len(array)):
+            #pour chaque element on regarde quand le dead time est fini
+            if (array[j]>(array[j-1]+deadTime)):
                 #delai plus grand que deadTime
                 #on garde le delai
                 c = c+1
@@ -181,11 +211,11 @@ def generateElectrons_fast(electronRate,packetSize,p,T_On,T_Off):
     te = (-1/newRate*np.log1p(-np.random.rand(Ne))).cumsum()
     
     #if the beamblanker is used, only electron during T_On state can reach the sample
-    # if T_Off > 0 and T_On > 0:
-    #     #te%(T_On+T_Off) match each electron to a period
-    #     # we keep the electron only if is time inside the period is smaller than T_On
-    #     #assuming that a period is T_On ns of on-state then T_Off ns of off-state
-    #     te = te[(te%(T_On+T_Off))<T_On]
+    if T_Off > 0 and T_On > 0:
+        #te%(T_On+T_Off) match each electron to a period
+        # we keep the electron only if is time inside the period is smaller than T_On
+        #assuming that a period is T_On ns of on-state then T_Off ns of off-state
+        te = te[(te%(T_On+T_Off))<T_On]
     return te
 
 #float64[:](float32,float64[:],float64[:]),
@@ -196,74 +226,34 @@ def generatePhotons_fast(tau, te, lookupTable):
     photonBunch.sort()
     return photonBunch
 
-# @njit(cache=True,nogil=True)
-# def generateBunches2(electronRate,PacketSize,tau,G,efficiency,lookupTable):  
-#     '''
-#     Use the truncated binomial law to generate only the photons
-#     that can reach one detector
-
-#     Parameters
-#     ----------
-#     electronRate : TYPE
-#         DESCRIPTION.
-#     PacketSize : TYPE
-#         DESCRIPTION.
-#     tau : TYPE
-#         DESCRIPTION.
-#     G : TYPE
-#         DESCRIPTION.
-#     efficiency : TYPE
-#         DESCRIPTION.
-#     lookupTable : TYPE
-#         DESCRIPTION.
-
-#     Returns
-#     -------
-#     photonBunch : TYPE
-#         DESCRIPTION.
-
-#     '''
-#     p = 1-(1-efficiency)**G #proba d'avoir au moins 1 succes parmis G essais
-#                             #proba de succes = efficiency
-    
-#     eRate = electronRate * p#on ajuste la frequence moyenne des electrons
-    
-#     Ne = np.random.binomial(PacketSize,p)
-#     Ng = TruncBin(lookupTable, Ne)
-    
-#     te = (-1/eRate*np.log1p(-np.random.rand(Ne))).cumsum()
-    
-#     #nombre de photons par electron en tenant compte de l efficacite
-#     # Garray = TruncBin(lookupTable,te.size)
-#     photonBunch = np.repeat(te,Ng)
-    
-
-#     #genere les temps entre les photon d'un bunch
-#     #distrib exponentielle exp(-tau)    
-#     photonBunch += (-tau*np.log1p(-np.random.rand(photonBunch.size)))
-#     photonBunch.sort()
-    
-#     #np.random.exponential(tau,te.size)
-#     #photonBunch.sort()
-#     # photonBunch = te+np.random.exponential(tau,te.size)
-    
-#     return photonBunch
 
 def test():
     param = parameters()
-    param.I = 40
-    param.T = 10
+    param.I = 9.6
+    param.T = 30
     param.BS = 0.5
     param.G = 10
-    param.dt = 64
-    param.efficiency = 1e-2
+    param.dt = 16
+    param.efficiency = 6e-4
     param.td = 86
-    param.tau = 8
-    param.detectorDelay = 11
+    param.tau = 0.2
+    param.detectorDelay = 26
     param.clockDelay = 0
+    param.T_On = 0
+    param.T_Off = 0
+    results_np = []
+    results_p = []
+    for i in [2.4,9.6,37.2,121,364,405]:
+        param.paralyzableDeadTime = False
+        param.I = i
+        res = simulate(param)
+        results_np.append(res)
+        
+        param.paralyzableDeadTime = True
+        res = simulate(param)
+        results_p.append(res)
     start = time.time()
-    results = simulate(param)
+    
     stop = time.time()
     print(stop-start)
-    
-    return results, param
+    return results_np, results_p
