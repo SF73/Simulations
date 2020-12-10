@@ -1,6 +1,4 @@
 import numpy as np
-from scipy.special import factorial
-import numba as nb
 
 
 def Cnk(n,k):
