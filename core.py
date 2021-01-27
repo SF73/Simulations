@@ -1,13 +1,27 @@
 from numba import njit, prange
 import numpy as np
-from parameters import parameters
-from stats import genLookupTable
+from .parameters import parameters
+from .stats import genLookupTable
 import time
 
 
 def simulate(param):
-    if param.table.size == 0:
-        param.table = genLookupTable(param.G,param.efficiency)
+    """
+    
+
+    Parameters
+    ----------
+    param : instance of Class Simulation.parameters.parameters
+        DESCRIPTION.
+
+    Returns
+    -------
+    results : list of results
+        [N0_real, N0_after_deadtime, N1_real, N1_after_deadtime, hist]
+
+    """
+    #if param.table.size == 0:
+    param.table = genLookupTable(param.G,param.efficiency)
         
     #param.packetSize = max(int(300*param.eRate),int(np.round(1600/param.succes_proba)))
     attributes = {x:param.__getattribute__(x) for x in dir(param) if not x.startswith("_")}
@@ -53,34 +67,31 @@ def run(param):
                 hist += np.histogram(delays,bins)[0]
             else:
                 a=np.random.rand(bunchSize)<param.BS
-                S = a.sum()
-                if ((S>0) and ((bunchSize - S) > 0)):
-                    
-                    clock = photons[~a] + param.clockDelay
-                    
-                    detector = photons[a] + param.detectorDelay
-                    
-                    N0_real += clock.size
-                    N1_real += detector.size
-                    clockMask = np.random.rand(clock.size)<param.clockFilter
-                    detectorMask = np.random.rand(detector.size)<param.detectorFilter
-                    if ((detectorMask.sum()>0) and (clockMask.sum()>0)):
-                        clock = clock[clockMask]
-                        detector = detector[detectorMask]
-                        
-                        clock = norm(0,param.jitter,clock)
-                        detector = norm(0,param.jitter,detector)
-                        if param.paralyzableDeadTime:    
-                            clock = applyDeadTime_p(clock,param.td)
-                            detector = applyDeadTime_p(detector,param.td)
-                        else:
-                            clock = applyDeadTime_np(clock,param.td)
-                            detector = applyDeadTime_np(detector,param.td)
-                        N0_after_deadtime += clock.size
-                        N1_after_deadtime += detector.size
-                        delays = correlate(clock,detector)
-                        
-                        hist += np.histogram(delays,bins)[0]
+                clock = photons[~a] + param.clockDelay
+                
+                detector = photons[a] + param.detectorDelay
+                
+                N0_real += clock.size
+                N1_real += detector.size
+                clockMask = np.random.rand(clock.size)<param.clockFilter
+                detectorMask = np.random.rand(detector.size)<param.detectorFilter
+                #if ((detectorMask.sum()>0) and (clockMask.sum()>0)):
+                clock = clock[clockMask]
+                detector = detector[detectorMask]
+                
+                clock = norm(0,param.jitter,clock)
+                detector = norm(0,param.jitter,detector)
+                if param.paralyzableDeadTime:    
+                    clock = applyDeadTime_p(clock,param.td)
+                    detector = applyDeadTime_p(detector,param.td)
+                else:
+                    clock = applyDeadTime_np(clock,param.td)
+                    detector = applyDeadTime_np(detector,param.td)
+                N0_after_deadtime += clock.size
+                N1_after_deadtime += detector.size
+                delays = correlate(clock,detector)
+                
+                hist += np.histogram(delays,bins)[0]
     return N0_real, N0_after_deadtime, N1_real, N1_after_deadtime, hist
 
 

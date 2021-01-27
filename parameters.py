@@ -1,7 +1,7 @@
 import numba as nb
 from numba.experimental import jitclass
 import numpy as np
-from stats import genLookupTable
+from .stats import genLookupTable
 
 spec = [
 ('I', nb.float32),
